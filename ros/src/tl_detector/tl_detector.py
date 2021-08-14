@@ -138,6 +138,8 @@ class TLDetector(object):
 
         # Get classification
         #return self.light_classifier.get_classification(cv_image)
+        #print("Predicted traffic light: ", self.light_classifier.get_classification(cv_image))
+        #print("Actual traffic light: ", light.state)
         
         # Before finishing classifier, use state from light_publisher.py
         return light.state
