@@ -132,7 +132,7 @@ class TLDetector(object):
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
         
         # Save images for traffic light classifier
-        path = r'/home/workspace/CarND-Capstone/traffic_light_imgs/'
+        path = r'/home/workspace/CarND-Capstone/saved_from_simulation/'
         file_name = 'image' + str(self.state_count)
         cv2.imwrite(path + file_name + ".jpg", cv_image)
 
