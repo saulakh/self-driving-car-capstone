@@ -29,8 +29,9 @@ for line in lines:
     if color_label == 'green':
         color_id = 2
 
-    # Add images for red, yellow, and green lights to training dataset
+    # Add images for traffic lights to training dataset
     light_img = cv2.imread(path)
+    light_img = cv2.resize(light_img, (48,108), interpolation = cv2.INTER_AREA)
     images.append(light_img)
     light_colors.append(color_id)
     
@@ -57,12 +58,12 @@ from keras.applications.vgg16 import VGG16
 model = Sequential()
 
 # Add layers to pretrained model
-model.add(VGG16(include_top = False, input_shape = (72,32,3)))
+model.add(VGG16(include_top = False, input_shape = (108,48,3)))
 model.add(Flatten())
 model.add(Dense(3, activation="softmax"))
 
-# Use categorical cross entropy instead of MSE for classification
-model.compile(loss='categorical_crossentropy', optimizer='adam') # try different learning rates
+# Use categorical cross entropy for classification
+model.compile(loss='categorical_crossentropy', optimizer='adam')
 history_object = model.fit(X_train, y_encoded, validation_split = 0.2, shuffle = True, epochs=10)
 
 # Print the keys contained in the history object

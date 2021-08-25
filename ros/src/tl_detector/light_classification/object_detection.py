@@ -1,17 +1,12 @@
 import tensorflow as tf
 import numpy as np
-import matplotlib.pyplot as plt
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageColor
 import cv2
 
 # Path for COCO SSD model graph
-COCO_GRAPH = 'ssd_mobilenet_v1_coco_11_06_2017/frozen_inference_graph.pb'
-
-# Import functions from object detection lab
-cmap = ImageColor.colormap
-COLOR_LIST = sorted([c for c in cmap.keys()])
+#COCO_GRAPH = 'ssd_mobilenet_v1_coco_11_06_2017/frozen_inference_graph.pb'
 
 def filter_boxes(min_score, boxes, scores, classes):
     """Return boxes with a confidence >= `min_score`"""
@@ -47,7 +42,7 @@ def draw_boxes(image, boxes, classes, thickness=4):
     for i in range(len(boxes)):
         bot, left, top, right = boxes[i, ...]
         class_id = int(classes[i])
-        color = COLOR_LIST[class_id]
+        color = 'blueviolet'
         draw.line([(left, top), (left, bot), (right, bot), (right, top), (left, top)], width=thickness, fill=color)
         
 def load_graph(graph_file):
@@ -62,64 +57,68 @@ def load_graph(graph_file):
     return graph
 
 # Load graph file
-detection_graph = load_graph(COCO_GRAPH)
+#detection_graph = load_graph(COCO_GRAPH)
+#image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
+#detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
+#detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
+#detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
 
-# The input placeholder for the image.
-# `get_tensor_by_name` returns the Tensor with the associated name in the Graph.
-image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
+def get_traffic_light(image, detection_graph, image_tensor, detection_boxes, detection_scores, detection_classes):
+    # Convert image to np array
+    image_np = np.expand_dims(np.asarray(image, dtype=np.uint8), 0)
 
-# Each box represents a part of the image where a particular object was detected.
-detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
+    with tf.Session(graph=detection_graph) as sess:
 
-# Each score represent how level of confidence for each of the objects.
-# Score is shown on the result image, together with the class label.
-detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
+        # Actual detection.
+        (boxes, scores, classes) = sess.run([detection_boxes, detection_scores, detection_classes], 
+                                            feed_dict={image_tensor: image_np})
 
-# The classification of the object (integer id).
-detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
+        # Remove unnecessary dimensions
+        boxes = np.squeeze(boxes)
+        scores = np.squeeze(scores)
+        classes = np.squeeze(classes)
 
-# Load a sample image
-image = Image.open('test_image.jpg')
-image_np = np.expand_dims(np.asarray(image, dtype=np.uint8), 0)
+        confidence_cutoff = 0.8
+        # Filter boxes with a confidence score less than `confidence_cutoff`
+        boxes, scores, classes = filter_boxes(confidence_cutoff, boxes, scores, classes)
 
-with tf.Session(graph=detection_graph) as sess:
+        # The current box coordinates are normalized to a range between 0 and 1.
+        # This converts the coordinates actual location on the image.
+        width, height = image.size
+        box_coords = to_image_coords(boxes, height, width)
 
-    # Actual detection.
-    (boxes, scores, classes) = sess.run([detection_boxes, detection_scores, detection_classes], 
-                                        feed_dict={image_tensor: image_np})
-
-    # Remove unnecessary dimensions
-    boxes = np.squeeze(boxes)
-    scores = np.squeeze(scores)
-    classes = np.squeeze(classes)
-
-    confidence_cutoff = 0.8
-    # Filter boxes with a confidence score less than `confidence_cutoff`
-    boxes, scores, classes = filter_boxes(confidence_cutoff, boxes, scores, classes)
-
-    # The current box coordinates are normalized to a range between 0 and 1.
-    # This converts the coordinates actual location on the image.
-    width, height = image.size
-    box_coords = to_image_coords(boxes, height, width)
-
-    # Each class will be represented by a differently colored box
-    draw_boxes(image, box_coords, classes)
+        # Each class will be represented by a differently colored box
+        draw_boxes(image, box_coords, classes)
     
-    # Save cropped image from each bounding box
-    for i in range(len(boxes)):
-        img = np.array(image)
-        light_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # Save cropped image from each bounding box
+        for i in range(len(boxes)):
+            img = np.array(image)
+            light_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # Get box coordinates for original image size 
-        box_coord = box_coords[i]
-        bot = int(box_coord[0])
-        left = int(box_coord[1])
-        top = int(box_coord[2])
-        right = int(box_coord[3])
+            # Get box coordinates for original image size 
+            box_coord = box_coords[i]
+            bot = int(box_coord[0])
+            left = int(box_coord[1])
+            top = int(box_coord[2])
+            right = int(box_coord[3])
 
-        # Crop image within bounding box
-        light_img = light_rgb[bot:top, left:right]
-        light_output = cv2.resize(light_img, (32,72), interpolation = cv2.INTER_AREA)
+            # Crop image within bounding box
+            light_img = light_rgb[bot:top, left:right]
+            light_output = cv2.resize(light_img, (48,108), interpolation = cv2.INTER_AREA)
 
-cv2.imwrite("coco_bounding_boxes.jpg", np.array(image))
-cv2.imwrite("coco_output.jpg", light_output)
+            return light_output
+
+"""
+# Load image
+image = Image.open('image0.jpg')
+
+# Get cropped traffic light image
+light_output = get_traffic_light(image)
+
+# Save cropped image
+cv2.imwrite("light.jpg", light_output)
+
+# Save original image with bounding boxes
+image_rgb = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
+cv2.imwrite("output.jpg", image_rgb)
+"""
