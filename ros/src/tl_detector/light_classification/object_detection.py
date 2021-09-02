@@ -5,9 +5,6 @@ from PIL import ImageDraw
 from PIL import ImageColor
 import cv2
 
-# Path for COCO SSD model graph
-#COCO_GRAPH = 'ssd_mobilenet_v1_coco_11_06_2017/frozen_inference_graph.pb'
-
 def filter_boxes(min_score, boxes, scores, classes):
     """Return boxes with a confidence >= `min_score`"""
     n = len(classes)
@@ -56,13 +53,6 @@ def load_graph(graph_file):
             tf.import_graph_def(od_graph_def, name='')
     return graph
 
-# Load graph file
-#detection_graph = load_graph(COCO_GRAPH)
-#image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
-#detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
-#detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
-#detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
-
 def get_traffic_light(image, detection_graph, image_tensor, detection_boxes, detection_scores, detection_classes):
     # Convert image to np array
     image_np = np.expand_dims(np.asarray(image, dtype=np.uint8), 0)
@@ -84,11 +74,8 @@ def get_traffic_light(image, detection_graph, image_tensor, detection_boxes, det
 
         # The current box coordinates are normalized to a range between 0 and 1.
         # This converts the coordinates actual location on the image.
-        width, height = image.size
+        height, width, channels = image.shape
         box_coords = to_image_coords(boxes, height, width)
-
-        # Each class will be represented by a differently colored box
-        draw_boxes(image, box_coords, classes)
     
         # Save cropped image from each bounding box
         for i in range(len(boxes)):
@@ -107,18 +94,3 @@ def get_traffic_light(image, detection_graph, image_tensor, detection_boxes, det
             light_output = cv2.resize(light_img, (48,108), interpolation = cv2.INTER_AREA)
 
             return light_output
-
-"""
-# Load image
-image = Image.open('image0.jpg')
-
-# Get cropped traffic light image
-light_output = get_traffic_light(image)
-
-# Save cropped image
-cv2.imwrite("light.jpg", light_output)
-
-# Save original image with bounding boxes
-image_rgb = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
-cv2.imwrite("output.jpg", image_rgb)
-"""
