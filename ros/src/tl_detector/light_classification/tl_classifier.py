@@ -3,7 +3,6 @@ import keras
 import numpy as np
 import tensorflow as tf
 import cv2
-import object_detection
 
 class TLClassifier(object):
     def __init__(self):
@@ -13,28 +12,23 @@ class TLClassifier(object):
         self.graph_file = 'light_classification/ssd_mobilenet_v1_coco_11_06_2017/frozen_inference_graph.pb'
 
         # Load graph file
-        def load_graph(graph_file):
-            """Loads a frozen inference graph"""
-            graph = tf.Graph()
-            with graph.as_default():
-                od_graph_def = tf.GraphDef()
-                with tf.gfile.GFile(graph_file, 'rb') as fid:
-                    serialized_graph = fid.read()
-                    od_graph_def.ParseFromString(serialized_graph)
-                    tf.import_graph_def(od_graph_def, name='')
-            return graph
+        self.detection_graph = tf.Graph()
+        with self.detection_graph.as_default():
+            od_graph_def = tf.GraphDef()
+            with tf.gfile.GFile(self.graph_file, 'rb') as fid:
+                serialized_graph = fid.read()
+                od_graph_def.ParseFromString(serialized_graph)
+                tf.import_graph_def(od_graph_def, name='')
+                
+            # Create tf session
+            self.sess = tf.Session(graph=self.detection_graph)
 
         # Load graph file
-        self.detection_graph = load_graph(self.graph_file)
         self.image_tensor = self.detection_graph.get_tensor_by_name('image_tensor:0')
         self.detection_boxes = self.detection_graph.get_tensor_by_name('detection_boxes:0')
         self.detection_scores = self.detection_graph.get_tensor_by_name('detection_scores:0')
         self.detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
         print("Graph loaded")
-        
-        # Load keras model for traffic lights
-        #self.model = keras.models.load_model('light_classification/lights_model.h5')
-        #print("Model loaded")
         
         return
 
@@ -50,40 +44,89 @@ class TLClassifier(object):
         """
         
         #TODO implement light color prediction
+        image_np = np.expand_dims(np.asarray(image, dtype=np.uint8), 0)
         
-        # Get cropped image of traffic light
-        light_image = object_detection.get_traffic_light(image, self.detection_graph, self.image_tensor, self.detection_boxes, self.detection_scores, self.detection_classes)
-        light_exp = np.expand_dims(np.asarray(light_image), axis=0)
-        
-        """
-        # Best traffic light prediction from softmax probabilities
-        softmax = self.model.predict(light_exp)
-        pred = np.argmax(softmax, axis=1)
+        def filter_boxes(min_score, boxes, scores, classes):
+            """Return boxes with a confidence >= `min_score`"""
+            n = len(classes)
+            idxs = []
+            for i in range(n):
+                if scores[i] >= min_score:
+                    idxs.append(i)
+    
+            filtered_boxes = boxes[idxs, ...]
+            filtered_scores = scores[idxs, ...]
+            filtered_classes = classes[idxs, ...]
+            return filtered_boxes, filtered_scores, filtered_classes
 
-        # Return predicted traffic light color
-        labels = ['red', 'yellow', 'green']
+        def to_image_coords(boxes, height, width):
+            """
+            The original box coordinate output is normalized, i.e [0, 1].
+    
+            This converts it back to the original coordinate based on the image
+            size.
+            """
+            box_coords = np.zeros_like(boxes)
+            box_coords[:, 0] = boxes[:, 0] * height
+            box_coords[:, 1] = boxes[:, 1] * width
+            box_coords[:, 2] = boxes[:, 2] * height
+            box_coords[:, 3] = boxes[:, 3] * width
+    
+            return box_coords
         
-        if (pred[0] == 0):
-            return TrafficLight.RED
-        elif (pred[0] == 1):
-            return TrafficLight.YELLOW
-        elif (pred[0] == 2):
-            return TrafficLight.GREEN
-        """
-        
-        # Find brightest light from HSV color space
-        light_hsv = cv2.cvtColor(np.asarray(light_image), cv2.COLOR_BGR2HSV)[:,:,-1]
-        height = light_hsv.shape[0]
-        y,x = np.where(light_hsv >= 0.8*light_hsv.max())
-        light_ratio = round(y.mean()/height, 2)
-        print("Light ratio:", light_ratio)
+        with self.detection_graph.as_default():
+            # Actual detection.
+            (boxes, scores, classes) = self.sess.run([self.detection_boxes, self.detection_scores, self.detection_classes], 
+                                            feed_dict={self.image_tensor: image_np})
 
-        # Predict light color from location
-        if light_ratio <= 0.45:
-            return TrafficLight.RED
-        if 0.45 < light_ratio <= 0.6:
-            return TrafficLight.YELLOW
-        if light_ratio > 0.6:
-            return TrafficLight.GREEN
+            # Remove unnecessary dimensions
+            boxes = np.squeeze(boxes)
+            scores = np.squeeze(scores)
+            classes = np.squeeze(classes)
+
+            confidence_cutoff = 0.8
+            # Filter boxes with a confidence score less than `confidence_cutoff`
+            boxes, scores, classes = filter_boxes(confidence_cutoff, boxes, scores, classes)
+
+            # The current box coordinates are normalized to a range between 0 and 1.
+            # This converts the coordinates actual location on the image.
+            height, width, channels = image.shape
+            box_coords = to_image_coords(boxes, height, width)
+            
+            if len(box_coords) > 0:
+                          
+                # Use box coords to crop traffic light image
+                img = np.array(image)
+                light_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+                # Get box coordinates for original image size 
+                box_coord = box_coords[0]
+                bot = int(box_coord[0])
+                left = int(box_coord[1])
+                top = int(box_coord[2])
+                right = int(box_coord[3])
+
+                # Crop image within bounding box
+                light_img = light_rgb[bot:top, left:right]
+                light_output = cv2.resize(light_img, (48,108), interpolation = cv2.INTER_AREA)
         
-        return TrafficLight.UNKNOWN
+                # Find brightest light from V-channel of HSV color space
+                light_hsv = cv2.cvtColor(np.asarray(light_output), cv2.COLOR_BGR2HSV)[:,:,-1]
+                height = light_hsv.shape[0]
+                y,x = np.where(light_hsv >= 0.8*light_hsv.max())
+                light_ratio = round(y.mean()/height, 2)
+                print("Light ratio:", light_ratio)
+
+                # Predict light color from light ratio
+                if light_ratio <= 0.45:
+                    print("Predicted traffic light: 0")
+                    return TrafficLight.RED
+                if 0.45 < light_ratio <= 0.6:
+                    print("Predicted traffic light: 1")
+                    return TrafficLight.YELLOW
+                if light_ratio > 0.6:
+                    print("Predicted traffic light: 2")
+                    return TrafficLight.GREEN
+                
+            else:
+                return TrafficLight.UNKNOWN
