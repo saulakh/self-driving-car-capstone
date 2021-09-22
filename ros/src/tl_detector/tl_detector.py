@@ -53,6 +53,9 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
+        
+        # Prediction from traffic light classifier
+        self.prediction = -1
 
         rospy.spin()
 
@@ -132,14 +135,20 @@ class TLDetector(object):
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
         
         # Save images for traffic light classifier
-        path = r'/home/workspace/CarND-Capstone/saved_from_simulation/'
-        file_name = 'image' + str(self.state_count)
-        cv2.imwrite(path + file_name + ".jpg", cv_image)
-
-        # Get classification
-        #return self.light_classifier.get_classification(cv_image)
-        #print("Predicted traffic light: ", self.light_classifier.get_classification(cv_image))
-        #print("Actual traffic light: ", light.state)
+        #path = r'/home/workspace/CarND-Capstone/simulation_imgs/'
+        #file_name = 'image' + str(self.state_count)
+        #cv2.imwrite(path + file_name + ".jpg", cv_image)
+        
+        if self.light_classifier:
+            self.prediction = self.light_classifier.get_classification(cv_image)
+        
+        if self.prediction != -1:
+            
+            if self.prediction != 4:
+                print("Predicted traffic light: ", self.prediction, ", Actual traffic light: ", light.state)
+            
+                # Get classification
+                return self.light_classifier.get_classification(cv_image)   
         
         # Before finishing classifier, use state from light_publisher.py
         return light.state
@@ -180,7 +189,7 @@ class TLDetector(object):
 
         if closest_light:
             state = self.get_light_state(closest_light)
-            print("Light waypoint: ", light_wp, ", State: ", state)
+            #print("Next light waypoint:", light_wp)
             return light_wp, state
         else:
             return -1, TrafficLight.UNKNOWN

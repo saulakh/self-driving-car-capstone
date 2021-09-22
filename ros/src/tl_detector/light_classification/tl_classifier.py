@@ -93,6 +93,8 @@ class TLClassifier(object):
             height, width, channels = image.shape
             box_coords = to_image_coords(boxes, height, width)
             
+            #print("Traffic lights found:", len(box_coords))
+            
             if len(box_coords) > 0:
                           
                 # Use box coords to crop traffic light image
@@ -112,20 +114,18 @@ class TLClassifier(object):
         
                 # Find brightest light from V-channel of HSV color space
                 light_hsv = cv2.cvtColor(np.asarray(light_output), cv2.COLOR_BGR2HSV)[:,:,-1]
+                cv2.imwrite("light_hsv.jpg", light_hsv)
                 height = light_hsv.shape[0]
                 y,x = np.where(light_hsv >= 0.8*light_hsv.max())
                 light_ratio = round(y.mean()/height, 2)
                 print("Light ratio:", light_ratio)
 
                 # Predict light color from light ratio
-                if light_ratio <= 0.45:
-                    print("Predicted traffic light: 0")
+                if light_ratio <= 0.5:
                     return TrafficLight.RED
-                if 0.45 < light_ratio <= 0.6:
-                    print("Predicted traffic light: 1")
+                if 0.5 < light_ratio <= 0.6:
                     return TrafficLight.YELLOW
                 if light_ratio > 0.6:
-                    print("Predicted traffic light: 2")
                     return TrafficLight.GREEN
                 
             else:
