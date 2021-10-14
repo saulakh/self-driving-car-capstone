@@ -139,6 +139,7 @@ class TLDetector(object):
         #file_name = 'image' + str(self.state_count)
         #cv2.imwrite(path + file_name + ".jpg", cv_image)
         
+        """
         if self.light_classifier:
             self.prediction = self.light_classifier.get_classification(cv_image)
         
@@ -148,7 +149,8 @@ class TLDetector(object):
                 print("Predicted traffic light: ", self.prediction, ", Actual traffic light: ", light.state)
             
                 # Get classification
-                return self.light_classifier.get_classification(cv_image)   
+                return self.light_classifier.get_classification(cv_image)
+        """
         
         # Before finishing classifier, use state from light_publisher.py
         return light.state
@@ -189,7 +191,6 @@ class TLDetector(object):
 
         if closest_light:
             state = self.get_light_state(closest_light)
-            #print("Next light waypoint:", light_wp)
             return light_wp, state
         else:
             return -1, TrafficLight.UNKNOWN
